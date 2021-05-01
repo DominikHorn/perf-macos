@@ -24,6 +24,46 @@ with any update without further notice. Please also acknowledge that you can not
 submit Apps to the MacOS Appstore that contain this code due to the use of
 private APIs.
 
+# Usage
+
+Simply allocate a PerfCounter in the scope you want to benchmark. Measurements
+will be taken from the point of allocation up to PerfCounter's destruction,
+i.e., when it goes out of scope:
+
+```c++
+#include "perf-macos.hpp"
+
+#include <cstdint>
+#include <iostream>
+
+int main() {
+    const uint64_t test_rep_cnt = 1000000;
+    uint64_t acc = 0x0;
+
+    {
+        // This will automatically kickoff measurements and stop as soon as ctr
+        // is destructed
+        const auto ctr = PerfCounter(test_rep_cnt);
+
+        // Code to benchmark
+        for (uint64_t i = 0; i < test_rep_cnt; i++) { acc ^= i * 0xABCDEF010; }
+    }
+
+    // Lay mans hack to prevent compiler from removing the benchmark code
+    std::cout << acc << std::endl;
+
+    return 0;
+}
+```
+
+Output. Note that the tested CPU only has 4 configurable perf counter registers
+and therefore only 4 concurrent measurements are possible:
+```
+averages after 1000000 repetitions: 
+   instructions      L1 misses     LLC misses  branch misses         cycles       branches
+       2.256831       0.000000       0.000208       0.000130              -              -
+```
+
 # Alternatives
 
 Consider using the official "Counters" instrument template from the Instruments App, 
