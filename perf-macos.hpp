@@ -221,15 +221,13 @@ private:
          * - Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3, Section 18.2.1.1.
          * - https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/x86_64/kpc_x86.c#L348
          */
-
         auto make_config = [](const uint64_t baseconf, const bool edge_detect = false) {
             const uint64_t INTEL_CONF_CTR_USER_MODE = 0x10000;
             //        const uint64_t INTEL_CONF_CTR_OS_MODE = 0x20000;
             const uint64_t INTEL_CONF_CTR_EDGE_DETECT = 0x40000;
             //        const uint64_t INTEL_CONF_CTR_ENABLED = 0x200000;
             //        const uint64_t INTEL_CONF_CTR_INVERTED = 0x400000;
-            // TODO: TEST
-            //        const auto INTEL_CONF_CTR_CMASK = [](const uint8_t mask) { return (0xFF & mask) << 24; };
+            //        const auto INTEL_CONF_CTR_CMASK = [](const uint8_t cmask) { return (cmask & 0xFF) << 24; };
 
             return (0xFFFF & baseconf) | INTEL_CONF_CTR_USER_MODE | (edge_detect ? INTEL_CONF_CTR_EDGE_DETECT : 0x0);
         };
