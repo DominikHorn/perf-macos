@@ -29,6 +29,8 @@
 #include <pthread.h>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 /**
  * =====================
@@ -101,40 +103,26 @@
 
 #define KPC_ERROR(msg) throw std::runtime_error(msg ". Did you forget to run as root?")
 
-// Platform specific
-#define INTEL_UNHALTED_CORE_CYCLES 0x003C
-#define INTEL_INSTRUCTIONS_RETIRED 0x00C0
-#define INTEL_UNHALTED_REFERENCE_CYCLES 0x013C
-#define INTEL_LLC_REFERENCES 0x4F2E
-#define INTEL_LLC_MISSES 0x412E
-#define INTEL_BRANCH_INSTRUCTION_RETIRED 0x00C4
-#define INTEL_BRANCH_MISSES_RETIRED 0x00C5
-
+// TODO: convert this to enum (?)
+#ifdef CPU_X86_64
+#define CORE_CYCLES 0x003C
+#define REFERENCE_CYCLES 0x013C
+#define INSTRUCTIONS_RETIRED 0x00C0
+#define BRANCH_INSTRUCTION_RETIRED 0x00C4
+#define BRANCH_MISSES_RETIRED 0x00C5
+#define LLC_REFERENCES 0x4F2E
+#define LLC_MISSES 0x412E
+#define L1_MISSES 0x01CB
+#define L2_MISSES 0x04CB
+#elif defined(CPU_ARM64)
+#error "arm64 not fully implemented"
+#endif
 /**
  * ====================
  *    Implementation
  * ====================
  */
 struct PerfCounter {
-private:
-    struct CounterSnapshot {
-        uint64_t instructions_retired = 0;
-        uint64_t llc_misses = 0;
-        uint64_t branch_instructions_retired = 0;
-        uint64_t cycles = 0;
-
-        CounterSnapshot operator-(const CounterSnapshot &b) const {
-            return {instructions_retired - b.instructions_retired, llc_misses - b.llc_misses,
-                    branch_instructions_retired - b.branch_instructions_retired, cycles - b.cycles};
-        }
-
-        CounterSnapshot(const uint64_t instructions_retired = 0, const uint64_t llc_misses = 0,
-                        const uint64_t branch_instructions_retired = 0, const uint64_t cycles = 0)
-            : instructions_retired(instructions_retired), llc_misses(llc_misses),
-              branch_instructions_retired(branch_instructions_retired), cycles(cycles){};
-    };
-
-public:
     /**
      * Initialize a perf counter. For convenience, you may specify a quality of
      * service class for the current thread. PerfCounter will take care of
@@ -148,11 +136,16 @@ public:
      *        Default is QOS_CLASS_USER_INTERACTIVE.
      */
     explicit PerfCounter(const uint64_t repetition_cnt, const qos_class_t qos_class = QOS_CLASS_USER_INTERACTIVE)
-        : repetition_cnt(repetition_cnt) {
-        // load kperf and hook symbols (i.e., load function pointers)
-        auto kperf = load_kperf();
-        hook_kperf_symbols(kperf);
+        : repetition_cnt(repetition_cnt), desired_counters({{INSTRUCTIONS_RETIRED, "instructions"},
+                                                            {L1_MISSES, "L1 misses"},
+                                                            {LLC_MISSES, "LLC misses"},
+                                                            {BRANCH_MISSES_RETIRED, "branch misses"},
+                                                            {CORE_CYCLES, "cycles"},
+                                                            {BRANCH_INSTRUCTION_RETIRED, "branches"}}) {
+        // Load kperf to communicate with XNU api
+        load_kperf();
 
+        // Setup once to
         CTRS_CNT = kpc_get_counter_count(KPC_CLASSES_MASK);
         counters = new uint64_t[CTRS_CNT];
 
@@ -160,30 +153,40 @@ public:
         // core this thread is scheduled on)
         pthread_set_qos_class_self_np(qos_class, 0);
 
-        // Configure perf counters & get initial reading
-        configure();
-        start = read();
+        // Ensure counters are properly setup
+        configure_counters();
+
+        // initial measurement
+        start = read_counter_values();
     }
 
     ~PerfCounter() {
-        auto delta = read() - start;
+        // Measure counter delta (TODO: Deal with overflows?)
+        const auto end = read_counter_values();
 
-        const auto avg = [&](auto c) {
-            return std::to_string(static_cast<long double>(c) / static_cast<long double>(repetition_cnt));
-        };
-
-        std::cout << std::setw(15) << "instructions" << std::setw(15) << "llc misses" << std::setw(15) << "branches"
-                  << std::setw(15) << "cycles" << std::endl;
-        std::cout << std::setw(15) << avg(delta.instructions_retired) << std::setw(15) << avg(delta.llc_misses)
-                  << std::setw(15) << avg(delta.branch_instructions_retired) << std::setw(15) << avg(delta.cycles)
-                  << std::endl;
+        // Print results
+        std::cout << "averages after " << std::dec << repetition_cnt << " repetitions: " << std::endl;
+        const auto column_width = 15;
+        for (const auto &it : desired_counters) { std::cout << std::setw(column_width) << it.second; }
+        std::cout << std::endl;
+        for (const auto &it : desired_counters) {
+            const auto start_val = start.find(it.second);
+            const auto end_val = end.find(it.second);
+            std::cout << std::setw(column_width)
+                      << (start_val == start.end() || end_val == end.end()
+                                  ? "-"
+                                  : std::to_string(static_cast<long double>(end_val->second - start_val->second) /
+                                                   static_cast<long double>(repetition_cnt)));
+        }
+        std::cout << std::endl;
 
         delete counters;
     }
 
-protected:
+private:
     uint64_t repetition_cnt;
-    CounterSnapshot start;
+    std::unordered_map<std::string, uint64_t> start;
+    std::vector<std::pair<uint64_t, std::string>> desired_counters;
 
     uint32_t CTRS_CNT;
     uint64_t *counters;
@@ -195,15 +198,34 @@ protected:
     KPERF_FUNCTIONS_LIST
 #undef KPERF_FUNC
 
-private:
-    forceinline CounterSnapshot read() const {
+    forceinline void load_kperf() {
+        // Load kperf code into adress space. Only do this once (`man dlopen` did not quite promise idempotency)
+        static void *kperf = dlopen(KPERF_FRAMEWORK_PATH, RTLD_LAZY);
+        if (!kperf) { throw std::runtime_error(std::string("Unable to load kperf: ").append(dlerror())); }
+
+        // obtain pointers to kperf functions
+#define KPERF_FUNC(func_sym, return_value, ...)                                                                        \
+    func_sym = (func_sym##_type *) (dlsym(kperf, #func_sym));                                                          \
+    if (!func_sym) {                                                                                                   \
+        throw std::runtime_error(std::string("kperf missing symbol: " #func_sym ": ").append(dlerror()));              \
+        return;                                                                                                        \
+    }
+        KPERF_FUNCTIONS_LIST
+#undef KPERF_FUNC
+    };
+
+    forceinline std::unordered_map<std::string, uint64_t> read_counter_values() const {
         // Obtain counters for current thread
         if (kpc_get_thread_counters(0, CTRS_CNT, counters)) { KPC_ERROR("Failed to read current kpc config"); }
 
-        return {counters[0], counters[1], counters[2], counters[3]};
+        std::unordered_map<std::string, uint64_t> counter_values{};
+        for (size_t i = 0; i < CTRS_CNT && i < desired_counters.size(); i++) {
+            counter_values.emplace(desired_counters[i].second, counters[i]);
+        }
+        return counter_values;
     }
 
-    forceinline void configure() {
+    forceinline void configure_counters() {
         auto configs_cnt = kpc_get_config_count(KPC_CLASSES_MASK);
         uint64_t configs[configs_cnt];
 
@@ -213,22 +235,25 @@ private:
          * - Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3, Section 18.2.1.1.
          * - https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/x86_64/kpc_x86.c#L348
          */
-        auto make_config = [](const uint64_t baseconf, const bool edge_detect = false) {
-            const uint64_t INTEL_CONF_CTR_USER_MODE = 0x10000;
-            //        const uint64_t INTEL_CONF_CTR_OS_MODE = 0x20000;
-            const uint64_t INTEL_CONF_CTR_EDGE_DETECT = 0x40000;
-            //        const uint64_t INTEL_CONF_CTR_ENABLED = 0x200000;
-            //        const uint64_t INTEL_CONF_CTR_INVERTED = 0x400000;
-            //        const auto INTEL_CONF_CTR_CMASK = [](const uint8_t cmask) { return (cmask & 0xFF) << 24; };
+        const uint64_t INTEL_CONF_CTR_USER_MODE = 0x10000;
+        //        const uint64_t INTEL_CONF_CTR_OS_MODE = 0x20000;
+        //        const uint64_t INTEL_CONF_CTR_EDGE_DETECT = 0x40000;
+        //        const uint64_t INTEL_CONF_CTR_ENABLED = 0x200000;
+        //        const uint64_t INTEL_CONF_CTR_INVERTED = 0x400000;
+        //        const auto INTEL_CONF_CTR_CMASK = [](const uint8_t cmask) { return (cmask & 0xFF) << 24; };
 
-            return (0xFFFF & baseconf) | INTEL_CONF_CTR_USER_MODE | (edge_detect ? INTEL_CONF_CTR_EDGE_DETECT : 0x0);
-        };
+        for (size_t i = 0; i < configs_cnt; i++) {
+            if (i >= desired_counters.size()) {
+                std::cerr << "[PerfCounter] More configurable perf registers are available than were selected"
+                          << std::endl;
+                break;
+            }
 
-        // TODO: we might have more/less registers available -> check!
-        configs[0] = make_config(INTEL_INSTRUCTIONS_RETIRED);
-        configs[1] = make_config(INTEL_LLC_MISSES);
-        configs[2] = make_config(INTEL_BRANCH_INSTRUCTION_RETIRED);
-        configs[3] = make_config(INTEL_UNHALTED_CORE_CYCLES);
+            // TODO: see if we actually need to set USER_MODE ourselfs
+            configs[i] = (0xFFFF & desired_counters[i].first) | INTEL_CONF_CTR_USER_MODE;
+        }
+#elif defined(CPU_ARM64)
+#error "arm64 not fully implemented"
 #endif
 
         // set config
@@ -242,29 +267,6 @@ private:
             KPC_ERROR("Failed to enable counting");
         }
     }
-
-    forceinline void hook_kperf_symbols(void *kperf) {
-#define KPERF_FUNC(func_sym, return_value, ...)                                                                        \
-    func_sym = (func_sym##_type *) (dlsym(kperf, #func_sym));                                                          \
-    if (!func_sym) {                                                                                                   \
-        throw std::runtime_error(std::string("kperf missing symbol: " #func_sym ": ").append(dlerror()));              \
-        return;                                                                                                        \
-    }
-        KPERF_FUNCTIONS_LIST
-#undef KPERF_FUNC
-    };
-
-    static forceinline void *load_kperf() {
-        // Yoldlo: you only load dynamic libraries once
-        static void *kperf = nullptr;
-        if (kperf) return kperf;
-
-        // Load kperf code into adress space
-        kperf = dlopen(KPERF_FRAMEWORK_PATH, RTLD_LAZY);
-        if (!kperf) { throw std::runtime_error(std::string("Unable to load kperf: ").append(dlerror())); }
-
-        return kperf;
-    };
 };
 
 /**
@@ -288,8 +290,10 @@ private:
 #undef INTEL_UNHALTED_CORE_CYCLES
 #undef INTEL_INSTRUCTIONS_RETIRED
 #undef INTEL_UNHALTED_REFERENCE_CYCLES
-#undef INTEL_LLC_REFERNCES
+#undef INTEL_LLC_REFERENCES
 #undef INTEL_LLC_MISSES
+#undef INTEL_L1_MISSES
+#undef INTEL_L2_MISSES
 #undef INTEL_BRANCH_INSTRUCTION_RETIRED
 #undef INTEL_BRANCH_MISSES_RETIRED
 

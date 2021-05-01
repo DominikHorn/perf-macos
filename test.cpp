@@ -8,8 +8,6 @@ int main() {
     uint64_t acc = 0x0;
 
     for (const auto test_rep_cnt : test_rep_cnts) {
-        std::cout << "repetitions: " << std::dec << test_rep_cnt << std::endl;
-
         // This will kickoff measuring and stop as soon as it's out of scope
         const auto ctr = PerfCounter(test_rep_cnt);
 
