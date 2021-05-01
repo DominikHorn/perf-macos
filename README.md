@@ -41,8 +41,8 @@ int main() {
     uint64_t acc = 0x0;
 
     {
-        // This will automatically kickoff measurements and stop as soon as ctr
-        // is destructed
+        // This will automatically kickoff measurements that stop as soon as ctr
+        // is destructed, i.e., at the end of this scope
         const auto ctr = PerfCounter(test_rep_cnt);
 
         // Code to benchmark
@@ -56,8 +56,9 @@ int main() {
 }
 ```
 
-Output. Note that the tested CPU only has 4 configurable perf counter registers
-and therefore only 4 concurrent measurements are possible:
+## Output 
+Note that the tested CPU only has 4 configurable perf counter registers
+and therefore only 4 concurrent measurements were taken:
 ```
 averages after 1000000 repetitions: 
    instructions      L1 misses     LLC misses  branch misses         cycles       branches
