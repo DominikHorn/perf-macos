@@ -74,7 +74,8 @@
 #define KPC_CLASS_POWER_MASK (1u << 2)
 #define KPC_CLASS_RAWPMU_MASK (1u << 3)
 
-/// Fixed counters are not properly implemented in XNU (https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/x86_64/kpc_x86.c#L316)
+/// Fixed counters are not properly implemented in XNU (https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/x86_64/kpc_x86.c#L316),
+/// i.e., they always count (ring 0 - 3)
 #ifdef CPU_X86_64
 #define KPC_CLASSES_MASK KPC_CLASS_CONFIGURABLE_MASK
 #else
