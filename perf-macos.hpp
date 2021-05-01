@@ -82,22 +82,21 @@
 #define KPC_CLASSES_MASK (KPC_CLASS_CONFIGURABLE_MASK | KPC_CLASS_FIXED_MASK)
 #endif
 
-#define KPERF_FRAMEWORK_PATH \
-    "/System/Library/PrivateFrameworks/kperf.framework/Versions/A/kperf"
+#define KPERF_FRAMEWORK_PATH "/System/Library/PrivateFrameworks/kperf.framework/Versions/A/kperf"
 
 // Available kperf functions
-#define KPERF_FUNCTIONS_LIST                                            \
-    KPERF_FUNC(kpc_force_all_ctrs_set, int, int)                        \
-    KPERF_FUNC(kpc_get_config, int, uint32_t, void *)                   \
-    KPERF_FUNC(kpc_get_config_count, uint32_t, uint32_t)                \
-    KPERF_FUNC(kpc_get_counter_count, uint32_t, uint32_t)               \
-    KPERF_FUNC(kpc_get_counting, int, void)                             \
-    KPERF_FUNC(kpc_get_period, int, uint32_t, void *)                   \
-    KPERF_FUNC(kpc_get_thread_counters, int, int, unsigned int, void *) \
-    KPERF_FUNC(kpc_set_config, int, uint32_t, void *)                   \
-    KPERF_FUNC(kpc_set_counting, int, uint32_t)                         \
-    KPERF_FUNC(kpc_set_period, int, uint32_t, void *)                   \
-    KPERF_FUNC(kpc_set_thread_counting, int, uint32_t)                  \
+#define KPERF_FUNCTIONS_LIST                                                                                           \
+    KPERF_FUNC(kpc_force_all_ctrs_set, int, int)                                                                       \
+    KPERF_FUNC(kpc_get_config, int, uint32_t, void *)                                                                  \
+    KPERF_FUNC(kpc_get_config_count, uint32_t, uint32_t)                                                               \
+    KPERF_FUNC(kpc_get_counter_count, uint32_t, uint32_t)                                                              \
+    KPERF_FUNC(kpc_get_counting, int, void)                                                                            \
+    KPERF_FUNC(kpc_get_period, int, uint32_t, void *)                                                                  \
+    KPERF_FUNC(kpc_get_thread_counters, int, int, unsigned int, void *)                                                \
+    KPERF_FUNC(kpc_set_config, int, uint32_t, void *)                                                                  \
+    KPERF_FUNC(kpc_set_counting, int, uint32_t)                                                                        \
+    KPERF_FUNC(kpc_set_period, int, uint32_t, void *)                                                                  \
+    KPERF_FUNC(kpc_set_thread_counting, int, uint32_t)                                                                 \
     KPERF_FUNC(kperf_sample_get, int, int *)
 
 #define KPC_ERROR(msg) throw std::runtime_error(msg ". Did you forget to run as root?")
@@ -125,16 +124,14 @@ private:
         uint64_t cycles = 0;
 
         CounterSnapshot operator-(const CounterSnapshot &b) const {
-            return {
-                    instructions_retired - b.instructions_retired,
-                    llc_misses - b.llc_misses,
-                    branch_instructions_retired - b.branch_instructions_retired,
-                    cycles - b.cycles};
+            return {instructions_retired - b.instructions_retired, llc_misses - b.llc_misses,
+                    branch_instructions_retired - b.branch_instructions_retired, cycles - b.cycles};
         }
 
-        CounterSnapshot(const uint64_t instructions_retired, const uint64_t llc_misses, const uint64_t branch_instructions_retired, const uint64_t cycles) : instructions_retired(instructions_retired), llc_misses(llc_misses), branch_instructions_retired(branch_instructions_retired), cycles(cycles){};
-        //        CounterSnapshot(const CounterSnapshot &other) = default;
-        CounterSnapshot() = default;
+        CounterSnapshot(const uint64_t instructions_retired = 0, const uint64_t llc_misses = 0,
+                        const uint64_t branch_instructions_retired = 0, const uint64_t cycles = 0)
+            : instructions_retired(instructions_retired), llc_misses(llc_misses),
+              branch_instructions_retired(branch_instructions_retired), cycles(cycles){};
     };
 
 public:
@@ -150,7 +147,8 @@ public:
      * @param qos_class quality of service to set for the current thread.
      *        Default is QOS_CLASS_USER_INTERACTIVE.
      */
-    explicit PerfCounter(const uint64_t repetition_cnt, const qos_class_t qos_class = QOS_CLASS_USER_INTERACTIVE) : repetition_cnt(repetition_cnt) {
+    explicit PerfCounter(const uint64_t repetition_cnt, const qos_class_t qos_class = QOS_CLASS_USER_INTERACTIVE)
+        : repetition_cnt(repetition_cnt) {
         // load kperf and hook symbols (i.e., load function pointers)
         auto kperf = load_kperf();
         hook_kperf_symbols(kperf);
@@ -174,15 +172,10 @@ public:
             return std::to_string(static_cast<long double>(c) / static_cast<long double>(repetition_cnt));
         };
 
-        std::cout << std::setw(15) << "instructions"
-                  << std::setw(15) << "llc misses"
-                  << std::setw(15) << "branches"
-                  << std::setw(15) << "cycles"
-                  << std::endl;
-        std::cout << std::setw(15) << avg(delta.instructions_retired)
-                  << std::setw(15) << avg(delta.llc_misses)
-                  << std::setw(15) << avg(delta.branch_instructions_retired)
-                  << std::setw(15) << avg(delta.cycles)
+        std::cout << std::setw(15) << "instructions" << std::setw(15) << "llc misses" << std::setw(15) << "branches"
+                  << std::setw(15) << "cycles" << std::endl;
+        std::cout << std::setw(15) << avg(delta.instructions_retired) << std::setw(15) << avg(delta.llc_misses)
+                  << std::setw(15) << avg(delta.branch_instructions_retired) << std::setw(15) << avg(delta.cycles)
                   << std::endl;
 
         delete counters;
@@ -196,8 +189,8 @@ protected:
     uint64_t *counters;
 
 // Define kperf functions for later access
-#define KPERF_FUNC(func_sym, return_value, ...)        \
-    typedef return_value func_sym##_type(__VA_ARGS__); \
+#define KPERF_FUNC(func_sym, return_value, ...)                                                                        \
+    typedef return_value func_sym##_type(__VA_ARGS__);                                                                 \
     func_sym##_type *func_sym;
     KPERF_FUNCTIONS_LIST
 #undef KPERF_FUNC
@@ -205,9 +198,7 @@ protected:
 private:
     forceinline CounterSnapshot read() const {
         // Obtain counters for current thread
-        if (kpc_get_thread_counters(0, CTRS_CNT, counters)) {
-            KPC_ERROR("Failed to read current kpc config");
-        }
+        if (kpc_get_thread_counters(0, CTRS_CNT, counters)) { KPC_ERROR("Failed to read current kpc config"); }
 
         return {counters[0], counters[1], counters[2], counters[3]};
     }
@@ -241,15 +232,11 @@ private:
 #endif
 
         // set config
-        if (kpc_set_config(KPC_CLASSES_MASK, configs)) {
-            KPC_ERROR("Could not configure counters");
-        }
+        if (kpc_set_config(KPC_CLASSES_MASK, configs)) { KPC_ERROR("Could not configure counters"); }
 
         // TODO: figure out what this is supposed to do. Best guess: ARM specific, not needed for intel (NOOP in this case)
         // https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/kern/kpc.h#L181
-        if (kpc_force_all_ctrs_set(1)) {
-            KPC_ERROR("Could not force ctrs");
-        }
+        if (kpc_force_all_ctrs_set(1)) { KPC_ERROR("Could not force ctrs"); }
 
         if (kpc_set_counting(KPC_CLASSES_MASK) || kpc_set_thread_counting(KPC_CLASSES_MASK)) {
             KPC_ERROR("Failed to enable counting");
@@ -257,11 +244,11 @@ private:
     }
 
     forceinline void hook_kperf_symbols(void *kperf) {
-#define KPERF_FUNC(func_sym, return_value, ...)                                                           \
-    func_sym = (func_sym##_type *) (dlsym(kperf, #func_sym));                                             \
-    if (!func_sym) {                                                                                      \
-        throw std::runtime_error(std::string("kperf missing symbol: " #func_sym ": ").append(dlerror())); \
-        return;                                                                                           \
+#define KPERF_FUNC(func_sym, return_value, ...)                                                                        \
+    func_sym = (func_sym##_type *) (dlsym(kperf, #func_sym));                                                          \
+    if (!func_sym) {                                                                                                   \
+        throw std::runtime_error(std::string("kperf missing symbol: " #func_sym ": ").append(dlerror()));              \
+        return;                                                                                                        \
     }
         KPERF_FUNCTIONS_LIST
 #undef KPERF_FUNC
@@ -274,9 +261,7 @@ private:
 
         // Load kperf code into adress space
         kperf = dlopen(KPERF_FRAMEWORK_PATH, RTLD_LAZY);
-        if (!kperf) {
-            throw std::runtime_error(std::string("Unable to load kperf: ").append(dlerror()));
-        }
+        if (!kperf) { throw std::runtime_error(std::string("Unable to load kperf: ").append(dlerror())); }
 
         return kperf;
     };

@@ -14,9 +14,7 @@ int main() {
         const auto ctr = PerfCounter(test_rep_cnt);
 
         // Code to benchmark
-        for (uint64_t i = 0; i < test_rep_cnt; i++) {
-            acc ^= i * 0xABCDEF010;
-        }
+        for (uint64_t i = 0; i < test_rep_cnt; i++) { acc ^= i * 0xABCDEF010; }
     }
 
     std::cout << acc << std::endl;
