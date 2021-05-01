@@ -1,10 +1,10 @@
 all:
-	make test
-	make run 
-test: *.hpp *.cpp
+	make compile run 
+compile: *.hpp *.cpp
 	clang++ -std=c++20 -O2 -fno-tree-vectorize -o test test.cpp -Wall -Wextra
-preprocess: *.hpp
-	clang++ -std=c++20 -E perf-macos.hpp
+debug: *.hpp *.cpp
+	clang++ -std=c++20 -O0 -g -fno-tree-vectorize -o test-debug test.cpp -Wall -Wextra
+	sudo lldb ./test-debug
 run:
 	sudo ./test
 clean:
