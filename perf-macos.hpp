@@ -202,6 +202,15 @@ protected:
 #undef KPERF_FUNC
 
 private:
+    forceinline CounterSnapshot read() const {
+        // Obtain counters for current thread
+        if (kpc_get_thread_counters(0, CTRS_CNT, counters)) {
+            KPC_ERROR("Failed to read current kpc config");
+        }
+
+        return {counters[0], counters[1], counters[2], counters[3]};
+    }
+
     forceinline void configure() {
         auto configs_cnt = kpc_get_config_count(KPC_CLASSES_MASK);
         uint64_t configs[configs_cnt];
@@ -247,16 +256,6 @@ private:
             KPC_ERROR("Failed to enable counting");
         }
     }
-
-    forceinline CounterSnapshot read() const {
-        // Obtain counters for current thread
-        if (kpc_get_thread_counters(0, CTRS_CNT, counters)) {
-            KPC_ERROR("Failed to read current kpc config");
-        }
-
-        return {counters[0], counters[1], counters[2], counters[3]};
-    }
-
 
     forceinline void hook_kperf_symbols(void *kperf) {
 #define KPERF_FUNC(func_sym, return_value, ...)                                                           \
