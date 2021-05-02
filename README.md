@@ -95,14 +95,13 @@ registers and therefore only 4 concurrent measurements were taken.
 
 ## DoNotEleminate - Discussion
 
-Benchmarking code contains a `DoNotEliminate(x)` statement to prevent the compiler from removing this computation
-during, optimization, or even the entire loop for that matter. One commonly used method to prevent this from happening
-is to simply accumulate the computation result into some variable and print that variable to `std::cout`. Especially for
-the microbenchmarking of single instructions, it seems this is not sufficient however to ensure that the compiler does
-not perform unwanted optimizations/eliminations.
+Benchmarking code contains `DoNotEliminate(x)` statements to prevent the compiler from removing the computation we want to 
+benchmark during optimization, or even the entire loop for that matter. One commonly used method to prevent this from happening
+is to accumulate the computation result into some variable and print that variable to `std::cout` after the loop. It seems this 
+alone is not sufficient however to ensure that the compiler does not perform unwanted optimizations/eliminations.
 
 `DoNotEliminate(x)` effectively tags the computation leading to the result `x` as having some observable magic side
-effect. This in turn outrules any fancy tricks to get around computing `x`, therefore ensuring that the emitted assembly
+effect. This in turn prohibits any fancy tricks to get around computing `x`, therefore ensuring that the emitted assembly
 always exactly contains the expected computation. For an explanation of how this works,
 see [this video](https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s, improved version from). The version in use
 in [test.cpp](https://github.com/DominikHorn/perf-macos/blob/main/test.cpp) stems
