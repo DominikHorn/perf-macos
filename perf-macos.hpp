@@ -367,6 +367,28 @@ namespace Perf {
         }
     };
 
+    /**
+     * Convenience wrapper for Counter.
+     * Will automatically start() as last
+     * action in constructor and stop(), average
+     * and pretty_print when it goes out of scope
+     */
+    struct BlockCounter : public Counter {
+        BlockCounter(const size_t N,
+                     std::vector<Event> measured_events = {instructions_retired, l1_misses, llc_misses,
+                                                           branch_misses_retired, cycles, branch_instruction_retired})
+            : Counter(measured_events), N(N) {
+            start();
+        }
+
+        ~BlockCounter() {
+            auto measurement = stop();
+            measurement.averaged(N).pretty_print();
+        }
+
+    private:
+        const size_t N;
+    };
 }// namespace Perf
 
 /**
