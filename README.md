@@ -5,24 +5,28 @@ perf counters are usually subject to tight permission restrictions, i.e., may on
 Kernel level support is usually required to access hardware performance counters.
 
 One known route for perf support is to write and load a KEXT which provides access to these instructions. Since this
-might negatively affect system stability and is generally not userfriendly, this project does not rely on a KEXT.
-Instead, it is based on the XNU perf counter implementation:
+might negatively affect system stability and is generally not userfriendly, **this project does not rely on a KEXT.**
+Instead, it is based on the XNU perf counter implementation. Some relevant files
+include:
 
 * [pmc.h](https://opensource.apple.com/source/xnu/xnu-2050.18.24/osfmk/pmc/pmc.h.auto.html).
 * [arm64 kpc.c](https://opensource.apple.com/source/xnu/xnu-4570.1.46/osfmk/arm64/kpc.c.auto.html)
 * [x86_64 kpc.c](https://opensource.apple.com/source/xnu/xnu-4570.1.46/osfmk/x86_64/kpc_x86.c.auto.html)
-* ... (more files exist in XNU that this project depends on)
+* ... (for more info, see [opensource.apple.com](https://opensource.apple.com/))
 
-To be able to access these kernel features, perf-macos uses the private
+To be able to access these kernel features, perf-macos uses the first party **private**
 Framework [kperf](http://newosxbook.com/src.jl?tree=xnu&file=/osfmk/kperf/kperf.h).
 
 Note that relying on the private kperf framework and undocumented kernel APIs means that this code could break at any
-point without further notice. Please also acknowledge that you can not submit Apps to the MacOS Appstore that contain
-this code due to the use of private APIs. You were warned.
+point without further notice. Please also acknowledge that submitting Apps to
+the MacOS Appstore that contain this code will likely result in a rejection,
+due to the use of private APIs. Afaik, Apple could even count your app
+submission as attempted fraud.
 
 # Usage
 
-For full usage examples, see test.cpp.
+For full usage examples, see
+[test.cpp](https://github.com/DominikHorn/perf-macos/blob/main/test.cpp).
 
 ## Basic Usage
 
