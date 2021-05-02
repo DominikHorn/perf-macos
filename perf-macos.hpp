@@ -103,171 +103,236 @@
 
 #define KPC_ERROR(msg) throw std::runtime_error(msg ". Did you forget to run as root?")
 
-// TODO: convert this to enum (?)
-#ifdef CPU_X86_64
-#define CORE_CYCLES 0x003C
-#define REFERENCE_CYCLES 0x013C
-#define INSTRUCTIONS_RETIRED 0x00C0
-#define BRANCH_INSTRUCTION_RETIRED 0x00C4
-#define BRANCH_MISSES_RETIRED 0x00C5
-#define LLC_REFERENCES 0x4F2E
-#define LLC_MISSES 0x412E
-#define L1_MISSES 0x01CB
-#define L2_MISSES 0x04CB
-#elif defined(CPU_ARM64)
-#error "arm64 not fully implemented"
-#endif
 /**
  * ====================
  *    Implementation
  * ====================
  */
-struct PerfCounter {
+namespace Perf {
+    enum Event {
+#ifdef CPU_X86_64
+        instructions_retired = 0x00C0,
+        l1_misses = 0x01CB,
+        llc_misses = 0x412E,
+        branch_misses_retired = 0x00C5,
+        cycles = 0x003C,
+        branch_instruction_retired = 0x00C4,
+        l2_misses = 0x04CB,
+        llc_references = 0x4F2E,
+        reference_cycles = 0x013C,
+#elif defined(CPU_ARM64)
+#error "arm64 not fully implemented"
+#endif
+    };
+
     /**
-     * Initialize a perf counter. For convenience, you may specify a quality of
-     * service class for the current thread. PerfCounter will take care of
-     * setting up the thread such that it is scheduled with the given qos.
-     * For the default value, QOS_CLASS_USER_INTERACTIVE, this should pin
-     * this thread to a high performance core for big/little CPUs.
+     * To ensure stable measurements, it is advisable to set thread quality
+     * of service. Especially for big/little CPUs, this can help ensuring that
+     * the code always executes on a high performance core.
      * See https://developer.apple.com/library/archive/documentation/Performance/Conceptual/power_efficiency_guidelines_osx/PrioritizeWorkAtTheTaskLevel.html
      * for more details.
      *
      * @param qos_class quality of service to set for the current thread.
      *        Default is QOS_CLASS_USER_INTERACTIVE.
      */
-    explicit PerfCounter(const uint64_t repetition_cnt, const qos_class_t qos_class = QOS_CLASS_USER_INTERACTIVE)
-        : repetition_cnt(repetition_cnt), desired_counters({{INSTRUCTIONS_RETIRED, "instructions"},
-                                                            {L1_MISSES, "L1 misses"},
-                                                            {LLC_MISSES, "LLC misses"},
-                                                            {BRANCH_MISSES_RETIRED, "branch misses"},
-                                                            {CORE_CYCLES, "cycles"},
-                                                            {BRANCH_INSTRUCTION_RETIRED, "branches"}}) {
-        // Load kperf to communicate with XNU api
-        load_kperf();
-
-        // Setup once to
-        CTRS_CNT = kpc_get_counter_count(KPC_CLASSES_MASK);
-        counters = new uint64_t[CTRS_CNT];
-
+    [[maybe_unused]] static forceinline void set_thread_qos(const qos_class_t qos_class = QOS_CLASS_USER_INTERACTIVE) {
         // set thread qos (for little/big architectures, this will decide which
         // core this thread is scheduled on)
         pthread_set_qos_class_self_np(qos_class, 0);
-
-        // Ensure counters are properly setup
-        configure_counters();
-
-        // initial measurement
-        start = read_counter_values();
     }
 
-    ~PerfCounter() {
-        // Measure counter delta (TODO: Deal with overflows?)
-        const auto end = read_counter_values();
+    /// A Perf::Measurement captures the values of perf hardware counters at a specific point in time
+    template<class D = uint64_t>
+    struct Measurement {
+        Measurement(const std::unordered_map<Event, D> &data) : data(data) {}
 
-        // Print results
-        std::cout << "averages after " << std::dec << repetition_cnt << " repetitions: " << std::endl;
-        const auto column_width = 15;
-        for (const auto &it : desired_counters) { std::cout << std::setw(column_width) << it.second; }
-        std::cout << std::endl;
-        for (const auto &it : desired_counters) {
-            const auto start_val = start.find(it.second);
-            const auto end_val = end.find(it.second);
-            std::cout << std::setw(column_width)
-                      << (start_val == start.end() || end_val == end.end()
-                                  ? "-"
-                                  : std::to_string(static_cast<long double>(end_val->second - start_val->second) /
-                                                   static_cast<long double>(repetition_cnt)));
+        void pretty_print(unsigned int column_width = 15) const {
+            for (const auto &it : data) { std::cout << std::setw(column_width) << human_readable_name(it.first); }
+            std::cout << std::endl;
+            for (const auto &it : data) { std::cout << std::setw(column_width) << std::to_string(it.second); }
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
 
-        delete counters;
-    }
+        template<class T, class R = long double>
+        Measurement<R> averaged(const T &N) const {
+            std::unordered_map<Event, R> new_data;
+            for (const auto &it : data) { new_data.emplace(it.first, static_cast<R>(it.second) / static_cast<R>(N)); }
+            return Measurement<R>(new_data);
+        }
 
-private:
-    uint64_t repetition_cnt;
-    std::unordered_map<std::string, uint64_t> start;
-    std::vector<std::pair<uint64_t, std::string>> desired_counters;
+    private:
+        const std::unordered_map<Event, D> data;
 
-    uint32_t CTRS_CNT;
-    uint64_t *counters;
+        static std::string human_readable_name(const Event &event) {
+            switch (event) {
+                case instructions_retired:
+                    return "Instructions";
+                case l1_misses:
+                    return "L1 misses";
+                case llc_misses:
+                    return "LLC misses";
+                case branch_misses_retired:
+                    return "Branch misses";
+                case cycles:
+                    return "Cycles";
+                case branch_instruction_retired:
+                    return "Branches";
+                case l2_misses:
+                    return "L2 misses";
+                case llc_references:
+                    return "LLC misses";
+                case reference_cycles:
+                    return "Reference cycles";
+            }
+        }
+    };
 
+    /**
+     * Perf::Counter retrieves perf hardware counter
+     * values at given points in time.
+     */
+    struct Counter {
+    private:
 // Define kperf functions for later access
 #define KPERF_FUNC(func_sym, return_value, ...)                                                                        \
     typedef return_value func_sym##_type(__VA_ARGS__);                                                                 \
     func_sym##_type *func_sym;
-    KPERF_FUNCTIONS_LIST
+        KPERF_FUNCTIONS_LIST
 #undef KPERF_FUNC
 
-    forceinline void load_kperf() {
-        // Load kperf code into adress space. Only do this once (`man dlopen` did not quite promise idempotency)
-        static void *kperf = dlopen(KPERF_FRAMEWORK_PATH, RTLD_LAZY);
-        if (!kperf) { throw std::runtime_error(std::string("Unable to load kperf: ").append(dlerror())); }
+        forceinline void load_kperf() {
+            // Load kperf code into adress space. Only do this once (`man dlopen` did not quite promise idempotency)
+            static void *kperf = dlopen(KPERF_FRAMEWORK_PATH, RTLD_LAZY);
+            if (!kperf) { throw std::runtime_error(std::string("Unable to load kperf: ").append(dlerror())); }
 
-        // obtain pointers to kperf functions
+            // obtain pointers to kperf functions
 #define KPERF_FUNC(func_sym, return_value, ...)                                                                        \
     func_sym = (func_sym##_type *) (dlsym(kperf, #func_sym));                                                          \
     if (!func_sym) {                                                                                                   \
         throw std::runtime_error(std::string("kperf missing symbol: " #func_sym ": ").append(dlerror()));              \
         return;                                                                                                        \
     }
-        KPERF_FUNCTIONS_LIST
+            KPERF_FUNCTIONS_LIST
 #undef KPERF_FUNC
-    };
+        };
 
-    forceinline std::unordered_map<std::string, uint64_t> read_counter_values() const {
-        // Obtain counters for current thread
-        if (kpc_get_thread_counters(0, CTRS_CNT, counters)) { KPC_ERROR("Failed to read current kpc config"); }
+    public:
+        /**
+         * Initialize a counter, optionally specifying which events to measure.
+         * On systems with fewer perf counter registers than requested counter
+         * @param measured_events
+         */
+        Counter(std::vector<Event> measured_events = {instructions_retired, l1_misses, llc_misses,
+                                                      branch_misses_retired, cycles, branch_instruction_retired})
+            : measured_events(measured_events) {
+            // Load kperf to communicate with XNU api
+            load_kperf();
 
-        std::unordered_map<std::string, uint64_t> counter_values{};
-        for (size_t i = 0; i < CTRS_CNT && i < desired_counters.size(); i++) {
-            counter_values.emplace(desired_counters[i].second, counters[i]);
+            // Setup once to
+            _counters_size = kpc_get_counter_count(KPC_CLASSES_MASK);
+            start_counters = new uint64_t[_counters_size];
+            stop_counters = new uint64_t[_counters_size];
         }
-        return counter_values;
-    }
 
-    forceinline void configure_counters() {
-        auto configs_cnt = kpc_get_config_count(KPC_CLASSES_MASK);
-        uint64_t configs[configs_cnt];
+        ~Counter() {
+            teardown_counters();
+
+            delete start_counters;
+            delete stop_counters;
+        }
+
+        /**
+         * Starts measuring according to configuration. Designed
+         * to induce least amount of overhead possible so that
+         * only your code is benchmarked.
+         */
+        forceinline void start() {
+            // Setup counters according to our configuration
+            configure_counters();
+            read_counters(start_counters);
+        }
+
+        /**
+         * Stops measuring and afterwards, computes elapsed counter
+         * deltas since last start() invocation. Designed to induce
+         * the least amount of overhead possible so that only your
+         * code is benchmarked.
+         *
+         * @return elapsed counter deltas since last start() invocation
+         */
+        forceinline Measurement<uint64_t> stop() {
+            read_counters(stop_counters);
+
+            std::unordered_map<Event, uint64_t> counter_values{};
+            for (size_t i = 0; i < std::min(_counters_size, measured_events.size()); i++) {
+                // TODO: deal with overflow in counter registers (automagically handled by xnu/kperf?)
+                counter_values.emplace(measured_events[i], stop_counters[i] - start_counters[i]);
+            }
+            return Measurement(counter_values);
+        }
+
+    private:
+        std::vector<Event> measured_events;
+
+        size_t _counters_size;
+        uint64_t *start_counters;
+        uint64_t *stop_counters;
+
+        forceinline void read_counters(uint64_t *counters) const {
+            // Obtain counters for current thread
+            if (kpc_get_thread_counters(0, _counters_size, counters)) {
+                KPC_ERROR("Failed to read current kpc config");
+            }
+        }
+
+        forceinline void configure_counters() {
+            auto configs_cnt = kpc_get_config_count(KPC_CLASSES_MASK);
+            uint64_t configs[configs_cnt];
 
 #ifdef CPU_X86_64
-        /**
-         * For documentation, see:
-         * - Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3, Section 18.2.1.1.
-         * - https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/x86_64/kpc_x86.c#L348
-         */
-        const uint64_t INTEL_CONF_CTR_USER_MODE = 0x10000;
-        //        const uint64_t INTEL_CONF_CTR_OS_MODE = 0x20000;
-        //        const uint64_t INTEL_CONF_CTR_EDGE_DETECT = 0x40000;
-        //        const uint64_t INTEL_CONF_CTR_ENABLED = 0x200000;
-        //        const uint64_t INTEL_CONF_CTR_INVERTED = 0x400000;
-        //        const auto INTEL_CONF_CTR_CMASK = [](const uint8_t cmask) { return (cmask & 0xFF) << 24; };
+            /**
+             * - Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3, Section 18.2.1.1.
+             * - https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/x86_64/kpc_x86.c#L348
+             */
+            const uint64_t INTEL_CONF_CTR_USER_MODE = 0x10000;
+            //        const uint64_t INTEL_CONF_CTR_OS_MODE = 0x20000;
+            //        const uint64_t INTEL_CONF_CTR_EDGE_DETECT = 0x40000;
+            //        const uint64_t INTEL_CONF_CTR_ENABLED = 0x200000;
+            //        const uint64_t INTEL_CONF_CTR_INVERTED = 0x400000;
+            //        const auto INTEL_CONF_CTR_CMASK = [](const uint8_t cmask) { return (cmask & 0xFF) << 24; };
 
-        for (size_t i = 0; i < configs_cnt; i++) {
-            if (i >= desired_counters.size()) {
-                std::cerr << "[PerfCounter] More configurable perf registers are available than were selected"
-                          << std::endl;
-                break;
+            for (size_t i = 0; i < configs_cnt; i++) {
+                if (i >= measured_events.size()) {
+                    std::cout << "[Perf::Counter] More configurable perf registers are available than were selected"
+                              << std::endl;
+                    break;
+                }
+
+                configs[i] = (0xFFFF & measured_events[i]) | INTEL_CONF_CTR_USER_MODE;
             }
-
-            // TODO: see if we actually need to set USER_MODE ourselfs
-            configs[i] = (0xFFFF & desired_counters[i].first) | INTEL_CONF_CTR_USER_MODE;
-        }
 #elif defined(CPU_ARM64)
 #error "arm64 not fully implemented"
 #endif
 
-        // set config
-        if (kpc_set_config(KPC_CLASSES_MASK, configs)) { KPC_ERROR("Could not configure counters"); }
+            // set config
+            if (kpc_set_config(KPC_CLASSES_MASK, configs)) { KPC_ERROR("Could not configure counters"); }
 
-        // TODO: figure out what this is supposed to do. Best guess: ARM specific, not needed for intel (NOOP in this case)
-        // https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/kern/kpc.h#L181
-        if (kpc_force_all_ctrs_set(1)) { KPC_ERROR("Could not force ctrs"); }
+            // TODO: figure out what this is supposed to do. Best guess: ARM specific, not needed for intel (appears to be NOOP in this case)
+            // https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/kern/kpc.h#L181
+            if (kpc_force_all_ctrs_set(1)) { KPC_ERROR("Could not force ctrs"); }
 
-        if (kpc_set_counting(KPC_CLASSES_MASK) || kpc_set_thread_counting(KPC_CLASSES_MASK)) {
-            KPC_ERROR("Failed to enable counting");
+            if (kpc_set_counting(KPC_CLASSES_MASK) || kpc_set_thread_counting(KPC_CLASSES_MASK)) {
+                KPC_ERROR("Failed to enable counting");
+            }
         }
-    }
-};
+
+        forceinline void teardown_counters() {
+            // TODO check whether this is enough (and whether we even need to do this or not)
+            if (kpc_force_all_ctrs_set(0)) { KPC_ERROR("Could not unforce counters"); }
+        }
+    };
+
+}// namespace Perf
 
 /**
  * ===================
@@ -286,15 +351,5 @@ private:
 
 #undef KPERF_FRAMEWORK_PATH
 #undef KPERF_FUNCTIONS_LIST
-
-#undef INTEL_UNHALTED_CORE_CYCLES
-#undef INTEL_INSTRUCTIONS_RETIRED
-#undef INTEL_UNHALTED_REFERENCE_CYCLES
-#undef INTEL_LLC_REFERENCES
-#undef INTEL_LLC_MISSES
-#undef INTEL_L1_MISSES
-#undef INTEL_L2_MISSES
-#undef INTEL_BRANCH_INSTRUCTION_RETIRED
-#undef INTEL_BRANCH_MISSES_RETIRED
 
 #endif
