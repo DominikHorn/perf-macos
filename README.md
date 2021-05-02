@@ -41,8 +41,9 @@ Perf::Counter counter;
 // Start measuring
 counter.start();
 
-// Code to benchmark. Iterated n-times to get accurate measurements
+// Iterate n-times to get accurate measurements
 for (uint64_t i = 0; i < n; i++) {
+    // Code to benchmark
     const auto val = 0xABCDEF03 / (i + 1);
     
     // See discussion for explanation
@@ -69,8 +70,9 @@ const uint64_t n = 1000000;
     // This will automatically start() after construction and stop() on destruction
     Perf::BlockCounter b(n);
 
-    // Code to benchmark. Iterated n-times to get accurate measurements
+    // Iterate n-times to get accurate measurements
     for (uint64_t i = 0; i < n; i++) {
+        // Code to benchmark
         const auto val = i ^ (i + 0xABCDEF01);
         
         // See discussion for explanation
