@@ -74,7 +74,6 @@ uint64_t acc = 0x0;
 }
 
 // Lay mans hack to prevent compiler elimination of acc computation.
-// For advanced method, see, e.g., https://github.com/google/benchmark/blob/376ebc26354ca2b79af94467133f3c35b539627e/include/benchmark/benchmark.h#L325
 std::cout << acc << std::endl;
 ```
 
