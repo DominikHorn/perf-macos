@@ -23,6 +23,7 @@
 #ifndef PERF_MACOS_HPP
 #define PERF_MACOS_HPP
 
+#include <chrono>
 #include <dlfcn.h>
 #include <iomanip>
 #include <iostream>
@@ -144,11 +145,20 @@ namespace Perf {
     /// A Perf::Measurement captures the values of perf hardware counters at a specific point in time
     template<class D = uint64_t>
     struct Measurement {
-        Measurement(const std::unordered_map<Event, D> &data) : data(data) {}
+        const std::unordered_map<Event, D> data;
+        const long double time_delta_ns;
+
+        Measurement(const std::unordered_map<Event, D> &data, const long double &time_delta_ns)
+            : data(data), time_delta_ns(time_delta_ns) {}
 
         void pretty_print(unsigned int column_width = 15) const {
+            // Table header
+            std::cout << std::setw(column_width) << "Elapses [ns]";
             for (const auto &it : data) { std::cout << std::setw(column_width) << human_readable_name(it.first); }
             std::cout << std::endl;
+
+            // Table row
+            std::cout << std::setw(column_width) << std::to_string(time_delta_ns);
             for (const auto &it : data) { std::cout << std::setw(column_width) << std::to_string(it.second); }
             std::cout << std::endl;
         }
@@ -157,12 +167,10 @@ namespace Perf {
         Measurement<R> averaged(const T &N) const {
             std::unordered_map<Event, R> new_data;
             for (const auto &it : data) { new_data.emplace(it.first, static_cast<R>(it.second) / static_cast<R>(N)); }
-            return Measurement<R>(new_data);
+            return Measurement<R>(new_data, time_delta_ns / static_cast<long double>(N));
         }
 
     private:
-        const std::unordered_map<Event, D> data;
-
         static std::string human_readable_name(const Event &event) {
             switch (event) {
                 case instructions_retired:
@@ -249,6 +257,7 @@ namespace Perf {
         forceinline void start() {
             // Setup counters according to our configuration
             configure_counters();
+            start_time = std::chrono::steady_clock::now();
             read_counters(start_counters);
         }
 
@@ -262,13 +271,14 @@ namespace Perf {
          */
         forceinline Measurement<uint64_t> stop() {
             read_counters(stop_counters);
+            const auto end_time = std::chrono::steady_clock::now();
 
             std::unordered_map<Event, uint64_t> counter_values{};
             for (size_t i = 0; i < std::min(_counters_size, measured_events.size()); i++) {
                 // TODO: deal with overflow in counter registers (automagically handled by xnu/kperf?)
                 counter_values.emplace(measured_events[i], stop_counters[i] - start_counters[i]);
             }
-            return Measurement(counter_values);
+            return Measurement(counter_values, (end_time - start_time).count());
         }
 
     private:
@@ -277,6 +287,7 @@ namespace Perf {
         size_t _counters_size;
         uint64_t *start_counters;
         uint64_t *stop_counters;
+        std::chrono::time_point<std::chrono::steady_clock> start_time;
 
         forceinline void read_counters(uint64_t *counters) const {
             // Obtain counters for current thread

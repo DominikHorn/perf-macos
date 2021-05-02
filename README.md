@@ -64,8 +64,8 @@ int main() {
 Note that the tested CPU only has 4 configurable perf counter registers
 and therefore only 4 concurrent measurements were taken:
 ```
-   Instructions  Branch misses      L1 misses     LLC misses
-       2.250109       0.000007       0.000000       0.000012
+   Elapses [ns]   Instructions  Branch misses      L1 misses     LLC misses
+       0.177785       2.250112       0.000010       0.000000       0.000000
 ```
 
 # Alternatives
