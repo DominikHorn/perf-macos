@@ -153,7 +153,7 @@ namespace Perf {
 
         void pretty_print(unsigned int column_width = 15) const {
             // Table header
-            std::cout << std::setw(column_width) << "Elapses [ns]";
+            std::cout << std::setw(column_width) << "Elapsed [ns]";
             for (const auto &it : data) { std::cout << std::setw(column_width) << human_readable_name(it.first); }
             std::cout << std::endl;
 

@@ -87,7 +87,7 @@ Note that the tested CPU only has 4 configurable perf counter registers and ther
 were taken:
 
 ```
-   Elapses [ns]   Instructions  Branch misses      L1 misses     LLC misses
+   Elapsed [ns]   Instructions  Branch misses      L1 misses     LLC misses
        0.177785       2.250112       0.000010       0.000000       0.000000
 ```
 
