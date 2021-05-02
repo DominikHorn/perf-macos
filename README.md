@@ -102,7 +102,7 @@ alone is not sufficient however to ensure that the compiler does not perform unw
 `DoNotEliminate(x)` effectively tags the computation leading to the result `x` as having some observable magic side
 effect. This in turn prohibits any fancy tricks to get around computing `x`, therefore ensuring that the emitted assembly
 always exactly contains the expected computation. For an explanation of how this works,
-see [this video](https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s, improved version from). The version in use
+see [this video](https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s). The version in use
 in [test.cpp](https://github.com/DominikHorn/perf-macos/blob/main/test.cpp) stems
 from [google benchmark](https://github.com/google/benchmark/blob/ba9a763def4eca056d03b1ece2946b2d4ef6dfcb/include/benchmark/benchmark.h#L326)
 , and is defined as follows:
