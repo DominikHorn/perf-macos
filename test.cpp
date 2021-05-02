@@ -9,7 +9,6 @@
 
 void basic_usage() {
     const uint64_t n = 1000000;
-    uint64_t acc = 0x0;
 
     // Initialize counter. This will take care of setting everything up for perf measurements
     Perf::Counter counter;
@@ -19,8 +18,8 @@ void basic_usage() {
 
     // Code to benchmark. Iterated n-times to get accurate measurements
     for (uint64_t i = 0; i < n; i++) {
-        acc += 0xABCDEF03 / (i + 1);
-        DoNotEliminate(acc);
+        const auto val = 0xABCDEF03 / (i + 1);
+        DoNotEliminate(val);
     }
 
     // Stop measuring
@@ -32,7 +31,6 @@ void basic_usage() {
 
 void block_counter() {
     const uint64_t n = 1000000;
-    uint64_t acc = 0x0;
 
     {
         // This will automatically start() after construction and stop() on destruction
@@ -40,8 +38,8 @@ void block_counter() {
 
         // Code to benchmark. Iterated n-times to get accurate measurements
         for (uint64_t i = 0; i < n; i++) {
-            acc += i;
-            DoNotEliminate(acc);
+            const auto val = i ^ (i + 0xABCDEF01);
+            DoNotEliminate(val);
         }
     }
 }

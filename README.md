@@ -34,7 +34,6 @@ For full usage examples, see
 // ...
 
 const uint64_t n = 1000000;
-uint64_t acc = 0x0;
 
 // Initialize counter. This will take care of setting everything up for perf measurements
 Perf::Counter counter;
@@ -44,10 +43,10 @@ counter.start();
 
 // Code to benchmark. Iterated n-times to get accurate measurements
 for (uint64_t i = 0; i < n; i++) {
-    acc += 0xABCDEF03 / (i+1);
+    const auto val = 0xABCDEF03 / (i + 1);
     
-    // See Discussion for explanation
-    DoNotEliminate(acc);
+    // See discussion for explanation
+    DoNotEliminate(val);
 }
 
 // Stop measuring
@@ -65,25 +64,24 @@ measurement.averaged(n).pretty_print();
 // ...
 
 const uint64_t n = 1000000;
-uint64_t acc = 0x0;
 
 {
- // This will automatically start() after construction and stop() on destruction
- Perf::BlockCounter b(n);
+    // This will automatically start() after construction and stop() on destruction
+    Perf::BlockCounter b(n);
 
- // Code to benchmark. Iterated n-times to get accurate measurements
- for (uint64_t i = 0; i < n; i++) {
-     acc += i;
-     
-     // See discussion for explanation
-     DoNotEliminate(acc);
- }
+    // Code to benchmark. Iterated n-times to get accurate measurements
+    for (uint64_t i = 0; i < n; i++) {
+        const auto val = i ^ (i + 0xABCDEF01);
+        
+        // See discussion for explanation
+        DoNotEliminate(val);
+    }
 }
 ```
 
 ## Output
 
-Benchmarking `acc ^= i + 0xABCDEF01` yields the following sample output on my machine:
+Benchmarking `x ^ (x + 0xABCDEF01)` yields the following sample output on my machine:
 
 ```
    Elapsed [ns]   Instructions  Branch misses      L1 misses     LLC misses
