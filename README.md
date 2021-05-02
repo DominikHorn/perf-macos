@@ -44,10 +44,8 @@ Perf::Counter counter;
 // Start measuring
 counter.start();
 
-// Code to benchmark
-{
-    for (uint64_t i = 0; i < n; i++) { acc ^= i * 0xABCDEF010; }
-}
+// Code to benchmark. Iterated n-times to get accurate measurements
+for (uint64_t i = 0; i < n; i++) { acc ^= i * 0xABCDEF010; }
 
 // Stop measuring
 auto measurement = counter.stop();
@@ -73,7 +71,7 @@ uint64_t acc = 0x0;
     // This will automatically start() after construction and stop() on destruction
     Perf::BlockCounter b(n);
 
-    // Code to benchmark
+    // Code to benchmark. Iterated n-times to get accurate measurements
     for (uint64_t i = 0; i < n; i++) { acc ^= i * 0xABCDEF010; }
 }
 
