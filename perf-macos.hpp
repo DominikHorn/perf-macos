@@ -198,6 +198,14 @@ namespace Perf {
     /**
      * Perf::Counter retrieves perf hardware counter
      * values at given points in time.
+     *
+     * Please note that perf counters seem to have a precision lower
+     * bound, afaik to prohibit some malicious use-cases. Also note
+     * that even though care was taken to minimize the amount of
+     * overhead, starting/stopping measurements will slightly
+     * skew counter values. It is therefore advisable to iterate
+     * multiple times over your benchmark and then average
+     * the resulting measurement.
      */
     struct Counter {
     private:
@@ -253,6 +261,14 @@ namespace Perf {
          * Starts measuring according to configuration. Designed
          * to induce least amount of overhead possible so that
          * only your code is benchmarked.
+         *
+         * Please note that perf counters seem to have a precision lower
+         * bound, afaik to prohibit some malicious use-cases. Also note
+         * that even though care was taken to minimize the amount of
+         * overhead, starting/stopping measurements will slightly
+         * skew counter values. It is therefore advisable to iterate
+         * multiple times over your benchmark and then average
+         * the resulting measurement.
          */
         forceinline void start() {
             // Setup counters according to our configuration
@@ -266,6 +282,14 @@ namespace Perf {
          * deltas since last start() invocation. Designed to induce
          * the least amount of overhead possible so that only your
          * code is benchmarked.
+         *
+         * Please note that perf counters seem to have a precision lower
+         * bound, afaik to prohibit some malicious use-cases. Also note
+         * that even though care was taken to minimize the amount of
+         * overhead, starting/stopping measurements will slightly
+         * skew counter values. It is therefore advisable to iterate
+         * multiple times over your benchmark and then average
+         * the resulting measurement.
          *
          * @return elapsed counter deltas since last start() invocation
          */
