@@ -91,8 +91,9 @@ Benchmarking `x ^ (x + 0xABCDEF01)` yields the following sample output on my mac
 Note that elapsed time will vary across runs. Please also note that the tested CPU only has 4 configurable perf counter
 registers and therefore only 4 concurrent measurements were taken.
 
-## DoNotEliminate - Discussion
+## Discussion
 
+### DoNotEliminate(x)
 Benchmarking code contains `DoNotEliminate(x)` statements to prevent the compiler from removing the computation we want to 
 benchmark during optimization, or even the entire loop for that matter. One commonly used method to prevent this from happening
 is to accumulate the computation result into some variable and print that variable to `std::cout` after the loop. It seems this 
