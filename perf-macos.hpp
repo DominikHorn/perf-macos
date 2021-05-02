@@ -102,7 +102,7 @@
     KPERF_FUNC(kpc_set_thread_counting, int, uint32_t)                                                                 \
     KPERF_FUNC(kperf_sample_get, int, int *)
 
-#define KPC_ERROR(msg) throw std::runtime_error(msg ". Did you forget to run as root?")
+#define PERF_ERROR(msg) throw std::runtime_error(msg ". Did you forget to run as root?")
 
 /**
  * ====================
@@ -151,6 +151,11 @@ namespace Perf {
         Measurement(const std::unordered_map<Event, D> &data, const long double &time_delta_ns)
             : data(data), time_delta_ns(time_delta_ns) {}
 
+        /**
+         * Pretty print this measurement in a one-row table (with header).
+         *
+         * @param column_width width (in chars) of each table column
+         */
         void pretty_print(unsigned int column_width = 15) const {
             // Table header
             std::cout << std::setw(column_width) << "Elapsed [ns]";
@@ -163,6 +168,16 @@ namespace Perf {
             std::cout << std::endl;
         }
 
+        /**
+         * Divide each measured datapoint by N, effectively obtaining
+         * an average figure for the benchmarked code within the N-step
+         * benchmark repeat loop.
+         *
+         * @tparam T type of N, e.g., uint64_t
+         * @tparam R result type, defaults to long double (precision)
+         * @param N divisor, meant to be set to amount of iterations of the benchmark repeat loop
+         * @return
+         */
         template<class T, class R = long double>
         Measurement<R> averaged(const T &N) const {
             std::unordered_map<Event, R> new_data;
@@ -316,7 +331,7 @@ namespace Perf {
         forceinline void read_counters(uint64_t *counters) const {
             // Obtain counters for current thread
             if (kpc_get_thread_counters(0, _counters_size, counters)) {
-                KPC_ERROR("Failed to read current kpc config");
+                PERF_ERROR("Failed to read current kpc config");
             }
         }
 
@@ -350,30 +365,43 @@ namespace Perf {
 #endif
 
             // set config
-            if (kpc_set_config(KPC_CLASSES_MASK, configs)) { KPC_ERROR("Could not configure counters"); }
+            if (kpc_set_config(KPC_CLASSES_MASK, configs)) { PERF_ERROR("Could not configure counters"); }
 
             // TODO: figure out what this is supposed to do. Best guess: ARM specific, not needed for intel (appears to be NOOP in this case)
             // https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/osfmk/kern/kpc.h#L181
-            if (kpc_force_all_ctrs_set(1)) { KPC_ERROR("Could not force ctrs"); }
+            if (kpc_force_all_ctrs_set(1)) { PERF_ERROR("Could not force ctrs"); }
 
             if (kpc_set_counting(KPC_CLASSES_MASK) || kpc_set_thread_counting(KPC_CLASSES_MASK)) {
-                KPC_ERROR("Failed to enable counting");
+                PERF_ERROR("Failed to enable counting");
             }
         }
 
         forceinline void teardown_counters() {
             // TODO check whether this is enough (and whether we even need to do this or not)
-            if (kpc_force_all_ctrs_set(0)) { KPC_ERROR("Could not unforce counters"); }
+            if (kpc_force_all_ctrs_set(0)) { PERF_ERROR("Could not unforce counters"); }
         }
     };
 
     /**
-     * Convenience wrapper for Counter.
-     * Will automatically start() as last
-     * action in constructor and stop(), average
-     * and pretty_print when it goes out of scope
+     * Scope-based convenience wrapper for Counter.
+     *
+     * Will automatically invoke start() as last
+     * action in constructor and stop(), averaged(N)
+     * and pretty_print() when it goes out of scope
      */
     struct BlockCounter : public Counter {
+        /**
+         * Construct a BlockCounter
+         *
+         * Will automatically invoke start() as last
+         * action in constructor and stop(), averaged(N)
+         * and pretty_print() when it goes out of scope
+         *
+         * @param N the number of iterations of the benchmark-repeat loop.
+         *  Measurements will be divided by N. The printed statistics therefore
+         *  effectively represent the average for the benchmark-repeat inner body
+         * @param measured_events
+         */
         BlockCounter(const size_t N,
                      std::vector<Event> measured_events = {instructions_retired, l1_misses, llc_misses,
                                                            branch_misses_retired, cycles, branch_instruction_retired})
@@ -405,8 +433,11 @@ namespace Perf {
 #undef KPC_CLASS_CONFIGURABLE_MASK
 #undef KPC_CLASS_POWER_MASK
 #undef KPC_CLASS_RAWPMU_MASK
+#undef KPC_CLASSES_MASK
 
 #undef KPERF_FRAMEWORK_PATH
 #undef KPERF_FUNCTIONS_LIST
+
+#undef PERF_ERROR
 
 #endif
