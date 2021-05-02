@@ -5,7 +5,7 @@
 
 // https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s, improved version from
 // https://github.com/google/benchmark/blob/ba9a763def4eca056d03b1ece2946b2d4ef6dfcb/include/benchmark/benchmark.h#L326
-#define DoNotEliminate(value) asm volatile("" : : "r,m"(value) : "memory")
+#define DoNotEliminate(x) asm volatile("" : : "r,m"(x) : "memory")
 
 void basic_usage() {
     const uint64_t n = 1000000;

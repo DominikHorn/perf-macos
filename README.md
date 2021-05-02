@@ -108,7 +108,7 @@ from [google benchmark](https://github.com/google/benchmark/blob/ba9a763def4eca0
 , and is defined as follows:
 
 ```c++
-#define DoNotEliminate(value) asm volatile("" : : "r,m"(value) : "memory")
+#define DoNotEliminate(x) asm volatile("" : : "r,m"(x) : "memory")
 ```
 
 # Alternatives
