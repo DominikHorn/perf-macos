@@ -95,16 +95,22 @@ registers and therefore only 4 concurrent measurements were taken.
 
 ### DoNotEliminate(x)
 
-Benchmarking code contains `DoNotEliminate(x)` statements to prevent the compiler from removing the computation we want
-to benchmark during optimization, or even the entire loop for that matter. One commonly used method to prevent this from
-happening is to accumulate the computation result into some variable and print that variable to `std::cout` after the
-loop. It seems this alone is not sufficient however to ensure that the compiler does not perform unwanted
-optimizations/eliminations, thus potentially tainting the obtained results.
+Compilers are nifty in discovering and subsequently eliminating dead code. For benchmarks, this poses a severe problem
+however as one often wants to measure statistics for a computation, without usually using the result in any way. One
+commonly used method to prevent unwanted compiler eliminations is to plainly use the computation result for some
+side-effect, e.g., accumulating results into a variable and printing the final accumulated result to `std::cout` after
+the loop.
 
-`DoNotEliminate(x)` effectively touches the variable `x` using an inline assembly statement in such a way, that the
-compiler believes some magic, unknown, yet observable side-effects occur, thus preventing elimination and other fancy
-tricks to get around actually performing the full computation to obtain `x`. The used inline assembly statement does not
-actually result in a generated instruction however, making this transparent in the actual benchmark results.
+While this suffices to guarantee that the correct accumulator result is computed, the compiler is still technically free
+in how it obtains the accumulator result. Sometimes the compiler will find really nifty tricks, like vectorization or
+performing some precomputation to obtain the end result in less time. It therefore seems that the accumulate+print
+technique is not sufficient on its own.
+
+`DoNotEliminate(x)` translates to a single, empty inline assembly statement which pretends to touch `x` in a way that
+has some magic, unknown, yet observable side-effect. This prohibits elimination and other fancy tricks to get around
+actually performing the full computation to obtain `x`. Since the inline assembly statement is empty however, it does
+not materialize as any real instruction. `DoNotEliminate(x)` is therefore fully transparent and does not taint the
+actual benchmark results.
 
 For a better explanation of how this works, see [this video](https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s). The
 version in use in [test.cpp](https://github.com/DominikHorn/perf-macos/blob/main/test.cpp) stems
