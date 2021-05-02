@@ -83,13 +83,15 @@ uint64_t acc = 0x0;
 
 ## Output
 
-Note that the tested CPU only has 4 configurable perf counter registers and therefore only 4 concurrent measurements
-were taken:
+Benchmarking `acc ^= i + 0xABCDEF01` yields the following sample output on my machine:
 
 ```
    Elapsed [ns]   Instructions  Branch misses      L1 misses     LLC misses
-       0.177785       2.250112       0.000010       0.000000       0.000000
+       0.682419       5.000810       0.000014       0.000002       0.000026
 ```
+
+Note that elapsed time will vary across runs. Please also note that the tested CPU only has 4 configurable perf counter
+registers and therefore only 4 concurrent measurements were taken.
 
 ## DoNotEleminate - Discussion
 
