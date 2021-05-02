@@ -94,16 +94,20 @@ registers and therefore only 4 concurrent measurements were taken.
 ## Discussion
 
 ### DoNotEliminate(x)
-Benchmarking code contains `DoNotEliminate(x)` statements to prevent the compiler from removing the computation we want to 
-benchmark during optimization, or even the entire loop for that matter. One commonly used method to prevent this from happening
-is to accumulate the computation result into some variable and print that variable to `std::cout` after the loop. It seems this 
-alone is not sufficient however to ensure that the compiler does not perform unwanted optimizations/eliminations.
 
-`DoNotEliminate(x)` effectively tags the computation leading to the result `x` as having some observable magic side
-effect. This in turn prohibits any fancy tricks to get around computing `x`, therefore ensuring that the emitted assembly
-always exactly contains the expected computation. For an explanation of how this works,
-see [this video](https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s). The version in use
-in [test.cpp](https://github.com/DominikHorn/perf-macos/blob/main/test.cpp) stems
+Benchmarking code contains `DoNotEliminate(x)` statements to prevent the compiler from removing the computation we want
+to benchmark during optimization, or even the entire loop for that matter. One commonly used method to prevent this from
+happening is to accumulate the computation result into some variable and print that variable to `std::cout` after the
+loop. It seems this alone is not sufficient however to ensure that the compiler does not perform unwanted
+optimizations/eliminations, thus potentially tainting the obtained results.
+
+`DoNotEliminate(x)` effectively touches the variable `x` using an inline assembly statement in such a way, that the
+compiler believes some magic, unknown, yet observable side-effects occur, thus preventing elimination and other fancy
+tricks to get around actually performing the full computation to obtain `x`. The used inline assembly statement does not
+actually result in a generated instruction however, making this transparent in the actual benchmark results.
+
+For a better explanation of how this works, see [this video](https://www.youtube.com/watch?v=nXaxk27zwlk&t=2441s). The
+version in use in [test.cpp](https://github.com/DominikHorn/perf-macos/blob/main/test.cpp) stems
 from [google benchmark](https://github.com/google/benchmark/blob/ba9a763def4eca056d03b1ece2946b2d4ef6dfcb/include/benchmark/benchmark.h#L326)
 , and is defined as follows:
 
