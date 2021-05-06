@@ -206,6 +206,8 @@ namespace Perf {
                     return "LLC misses";
                 case reference_cycles:
                     return "Reference cycles";
+                default:
+                    return "Unimplemented";
             }
         }
     };
