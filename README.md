@@ -91,7 +91,7 @@ Benchmarking `x ^ (x + 0xABCDEF01)` yields the following sample output on my mac
 ```
 
 Note that elapsed time will vary across runs. Please also note that the tested CPU only has 4 configurable perf counter
-registers and therefore only 4 concurrent measurements were taken.
+registers per logical core and therefore only 4 concurrent measurements were taken.
 
 ## Discussion
 
